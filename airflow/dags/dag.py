@@ -55,7 +55,7 @@ stage_songs_to_redshift = StageToRedshiftOperator(
 load_songplays_table = LoadFactOperator(
     task_id='Load_songplays_fact_table',
     dag=dag,
-    mode="upsert", # Use mode="append" to not delete repeated records 
+    upsert=True,  
     redshift_conn_id="redshift",
     query=SqlQueries.songplay_table_insert,
     final_table='songplays',
@@ -99,11 +99,13 @@ run_quality_checks = DataQualityOperator(
     task_id='Run_data_quality_checks',
     dag=dag,
     redshift_conn_id="redshift",
-    tables=["public.songplays", 
-            "public.songs",
-            "public.users",
-            "public.artists",
-            "public.time"]
+    tests = [
+        {'test': "SELECT COUNT (*) FROM public.users WHERE userid IS NULL", 'exp_result': 0},
+        {'test': "SELECT COUNT (*) FROM public.songs WHERE songid IS NULL", 'exp_result': 0},
+        {'test': "SELECT COUNT (*) FROM public.artists WHERE artistid IS NULL", 'exp_result': 0},
+        {'test': "SELECT COUNT (*) FROM public.time WHERE start_time IS NULL", 'exp_result': 0},
+        {'test': "SELECT COUNT (*) FROM public.songplays WHERE playid IS NULL", 'exp_result': 0}
+    ]
 )
 
 end_operator = DummyOperator(task_id='Stop_execution',  dag=dag)

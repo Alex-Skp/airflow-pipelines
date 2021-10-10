@@ -7,36 +7,29 @@ class LoadFactOperator(BaseOperator):
 
     ui_color = '#F98866'
     
-    upsert_sql ="""
+    create_sql ="""
     DROP TABLE IF EXISTS temp_table;
     
     CREATE TABLE temp_table AS(
     {query}
     );
-    
+    """
+
+    delete_sql ="""
     DELETE FROM {final_table}
     WHERE {primary_key} IN (SELECT {primary_key} FROM temp_table);
-    
-    INSERT INTO {final_table}
-    (SELECT * FROM temp_table);
-    
     """
     
-    append_sql="""
-    DROP TABLE IF EXISTS temp_table;
-    
-    CREATE TABLE temp_table AS(
-    {query}
-    );
-    
+    insert_sql ="""
     INSERT INTO {final_table}
     (SELECT * FROM temp_table);
+    
     """
     
 
     @apply_defaults
     def __init__(self,
-                 mode="upsert",
+                 upsert=True,
                  query="",
                  redshift_conn_id="",
                  final_table='',
@@ -44,7 +37,7 @@ class LoadFactOperator(BaseOperator):
                  *args, **kwargs):
 
         super(LoadFactOperator, self).__init__(*args, **kwargs)
-        self.mode = mode
+        self.upsert = upsert
         self.query = query
         self.redshift_conn_id = redshift_conn_id
         self.final_table = final_table
@@ -53,20 +46,23 @@ class LoadFactOperator(BaseOperator):
     def execute(self, context):    
         redshift = PostgresHook(postgres_conn_id = self.redshift_conn_id)
         mode = self.mode
-        if mode=="append":
-            self.log.info('Running {}, Updating with mode: append {}'.format(self.query, self.final_table))
-            final_query = LoadFactOperator.append_sql.format(
+        if upsert==True:
+            concat_query = LoadFactOperator.create_sql + LoadFactOperator.delete_sql + LoadFactOperator.insert_sql
+            final_query = concat_query.format(
                 query=self.query,
                 final_table=self.final_table,
-                primary_key=self.primary_key,
+                primary_key=self.primary_key
             )
         
         else:
-            self.log.info('Running {}, Updating with mode: upsert {}'.format(self.query, self.final_table))
-            final_query = LoadFactOperator.upsert_sql.format(
+            concat_query = LoadFactOperator.create_sql + LoadFactOperator.insert_sql
+            final_query = concat_query.format(
                 query=self.query,
                 final_table=self.final_table,
-                primary_key=self.primary_key,
+                primary_key=self.primary_key
             )
+
+        
+        self.log.info('Running {}, For table {}'.format(self.query, self.final_table))
         redshift.run(final_query)
         
