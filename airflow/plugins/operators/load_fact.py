@@ -46,7 +46,7 @@ class LoadFactOperator(BaseOperator):
     def execute(self, context):    
         redshift = PostgresHook(postgres_conn_id = self.redshift_conn_id)
         mode = self.mode
-        if upsert==True:
+        if self.upsert==True:
             concat_query = LoadFactOperator.create_sql + LoadFactOperator.delete_sql + LoadFactOperator.insert_sql
             final_query = concat_query.format(
                 query=self.query,
